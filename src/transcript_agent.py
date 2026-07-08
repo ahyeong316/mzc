@@ -19,7 +19,7 @@ def analyze_transcript_pdf(pdf_path: str) -> dict:
     required_keys = ["department", "total_credits", "completed_courses"]
     for key in required_keys:
         if key not in transcript_data:
-            transcript_data["warnings"].append(f"필수 누락 데이터: {key}")
+            transcript_data.setdefault("warnings", []).append(f"필수 누락 데이터: {key}")
             
     print("[*] 성적증명서 분석 완료.")
     return transcript_data

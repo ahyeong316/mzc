@@ -2,22 +2,22 @@
 import json
 import base64
 import boto3
-from .prompts import TRANSCRIPT_EXTRACTION_PROMPT
+from .prompt import TRANSCRIPT_EXTRACTION_PROMPT
 
 # 🌟 아까 만든 비밀 금고(config.py)에서 AWS 키 불러오기!
-from config import AWS_ACCESS_KEY, AWS_SECRET_KEY
+from .config import AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION
 
 def extract_transcript_data_with_ai(pdf_path: str) -> dict:
     """PDF 파일을 읽고 AWS Bedrock AI 모델을 통해 JSON 데이터를 추출합니다."""
     
     try:
         # 1. AWS Bedrock 클라이언트 설정 (비밀 금고 키 사용)
-        client = boto3.client(
-            'bedrock-runtime', 
-            region_name='ap-northeast-2',
-            aws_access_key_id=AWS_ACCESS_KEY,
-            aws_secret_access_key=AWS_SECRET_KEY
-        )
+        # 키가 .env에 있으면 사용, 없으면 boto3 기본 자격증명 체인 사용
+        client_kwargs = {"region_name": AWS_REGION}
+        if AWS_ACCESS_KEY and AWS_SECRET_KEY:
+            client_kwargs["aws_access_key_id"] = AWS_ACCESS_KEY
+            client_kwargs["aws_secret_access_key"] = AWS_SECRET_KEY
+        client = boto3.client('bedrock-runtime', **client_kwargs)
         
         # 2. 모델 설정 (PDF 멀티모달 인식이 뛰어난 Claude 3.5 Sonnet 사용)
         model_id = 'anthropic.claude-3-5-sonnet-20240620-v1:0'

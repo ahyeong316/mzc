@@ -5,6 +5,12 @@ import streamlit as st
 from src.privacy import save_uploaded_file, delete_uploaded_file
 from src.display import show_result
 from src.guardrails import sanitize_strategy_report, validate_user_request
+from src.integration_agent import (
+    run_role1,
+    run_role2_curriculum,
+    run_role2_scholarship_policy,
+    run_role3,
+)
 
 
 TEMP_FOLDER = "temp"
@@ -172,44 +178,39 @@ if analyze:
         progress = st.progress(0)
         status = st.empty()
 
+        # ── 역할 1: 성적증명서 PDF AI 분석 ──
         status.info("📄 성적증명서 PDF를 AI 에이전트가 분석하고 있습니다...")
         progress.progress(20)
-        time.sleep(1)
 
+        transcript_data = run_role1(st.session_state.uploaded_pdf_path)
+
+        # ── 역할 2: 교육과정 검색 ──
         status.info("📚 최신 교육과정 편람을 검색하고 있습니다...")
         progress.progress(40)
-        time.sleep(1)
 
-        status.info("🎓 졸업요건과 이수 현황을 비교하고 있습니다...")
+        curriculum_requirements = run_role2_curriculum(
+            transcript_data,
+            department=department,
+        )
+
+        # ── 역할 2: 장학 제도 ──
+        status.info("💰 장학 제도 정보를 불러오고 있습니다...")
         progress.progress(60)
-        time.sleep(1)
 
-        status.info("💰 장학금 가능성과 전략을 분석하고 있습니다...")
+        scholarship_policy = run_role2_scholarship_policy()
+
+        # ── 역할 3: 전략 분석 ──
+        status.info("🎓 졸업요건 비교와 수강/장학 전략을 분석하고 있습니다...")
         progress.progress(80)
-        time.sleep(1)
+
+        strategy_report = run_role3(
+            transcript_data=transcript_data,
+            curriculum_requirements=curriculum_requirements,
+            scholarship_policy=scholarship_policy,
+        )
 
         progress.progress(100)
         status.success("✅ 분석 완료!")
-
-        strategy_report = {
-            "earned_credit": 68,
-            "gpa": 3.92,
-            "major_subjects": [
-                "프로그래밍",
-                "자료구조",
-                "알고리즘"
-            ],
-            "remaining_credit": 62,
-            "remaining_subjects": [
-                "운영체제",
-                "데이터베이스"
-            ],
-            "recommend_subjects": [
-                "컴퓨터구조",
-                "캡스톤디자인"
-            ],
-            "scholarship": "학번 20240001 학생은 성적우수장학금 신청 가능성이 높습니다. 문의 전화번호는 010-1234-5678입니다."
-        }
 
         safe_strategy_report = sanitize_strategy_report(strategy_report)
 

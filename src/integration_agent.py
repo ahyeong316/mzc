@@ -229,10 +229,11 @@ def run_role2_sync() -> None:
     return None
 
 
-def run_role2_curriculum(transcript_data: dict) -> dict:
+def run_role2_curriculum(transcript_data: dict, department: str | None = None) -> dict:
+    """department 인자를 주면 (예: UI 입력값) 성적표의 학과보다 우선 사용한다."""
     print("\n===== 역할 2 실행: 교육과정 Knowledge Base 검색 =====")
 
-    department = transcript_data.get("department") or "컴퓨터공학과"
+    department = department or transcript_data.get("department") or "컴퓨터공학과"
 
     if get_curriculum_requirements is None:
         print(f"역할 2 RAG 모듈을 불러오지 못했습니다: {ROLE2_RAG_IMPORT_ERROR}")
