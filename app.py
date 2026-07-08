@@ -740,6 +740,9 @@ def render_page_header():
     uploaded_state = "업로드 완료" if st.session_state.uploaded_pdf_path else "PDF 대기"
     uploaded_class = "pill-success" if st.session_state.uploaded_pdf_path else "pill-muted"
 
+    api_state = "Gemini API 연결됨" if os.getenv("GOOGLE_API_KEY") else "Gemini API 미설정"
+    api_class = "pill-success" if os.getenv("GOOGLE_API_KEY") else "pill-warn"
+
     st.markdown(
         '<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#EEF4FF;color:#3182F6;font-size:12px;font-weight:800;margin-bottom:14px;">SCNU AI Strategy Agent</div>',
         unsafe_allow_html=True
@@ -765,7 +768,7 @@ def render_page_header():
 
     with header_right:
         st.markdown(
-            f'<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:8px;"><span class="pill {uploaded_class}">{uploaded_state}</span></div>',
+            f'<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:8px;"><span class="pill {uploaded_class}">{uploaded_state}</span><span class="pill {api_class}">{api_state}</span></div>',
             unsafe_allow_html=True
         )
 
@@ -795,7 +798,6 @@ def render_page_header():
         st.markdown(step_card("04", "전략 추천"), unsafe_allow_html=True)
 
     st.markdown('<div style="height:24px;"></div>', unsafe_allow_html=True)
-
 def open_card(title, description=None, pill=None, pill_class="pill-info"):
     pill_html = ""
 
@@ -1248,7 +1250,118 @@ department = ""
 user_request = ""
 analyze = False
 
+st.markdown('<div id="input-area"></div>', unsafe_allow_html=True)
 
+
+open_card(
+    title="성적증명서 PDF 업로드",
+    description="학생 본인의 성적증명서 PDF를 업로드하면 분석 과정에서만 임시 저장됩니다.",
+    pill="필수",
+    pill_class="pill-info"
+)
+
+uploaded_file = st.file_uploader(
+    "성적증명서 PDF 업로드",
+    type=["pdf"],
+    key=f"pdf_uploader_{st.session_state.uploader_key}"
+)
+
+if uploaded_file is not None:
+
+    is_new_file = (
+        st.session_state.uploaded_pdf_name != uploaded_file.name
+        or st.session_state.uploaded_pdf_size != uploaded_file.size
+        or st.session_state.uploaded_pdf_path is None
+    )
+
+    if is_new_file:
+
+        if st.session_state.uploaded_pdf_path is not None:
+            delete_uploaded_file(st.session_state.uploaded_pdf_path)
+
+        saved_path = save_uploaded_file(uploaded_file)
+
+        st.session_state.uploaded_pdf_path = saved_path
+        st.session_state.uploaded_pdf_name = uploaded_file.name
+        st.session_state.uploaded_pdf_size = uploaded_file.size
+        st.session_state.strategy_report = None
+        st.session_state.privacy_notice_message = None
+        st.session_state.guardrail_error_message = None
+
+    st.markdown(
+        f"""
+<div class="list-row">
+    <span class="pill pill-success">업로드 완료</span>
+    <span style="margin-left:8px;">PDF가 정상적으로 업로드되었습니다.</span>
+</div>
+<div class="list-row">파일 이름 : {_safe(uploaded_file.name)}</div>
+""",
+        unsafe_allow_html=True
+    )
+
+close_card()
+
+
+open_card(
+    title="학생 기본 정보",
+    description="교육과정 편람과 졸업요건 비교에 사용할 학과 정보를 입력합니다.",
+    pill="입력",
+    pill_class="pill-muted"
+)
+
+department = st.text_input(
+    "학과를 입력하세요",
+    placeholder="예) 컴퓨터공학과"
+)
+
+if department:
+    st.markdown(
+        f"""
+<div class="list-row">학과 : {_safe(department)}</div>
+""",
+        unsafe_allow_html=True
+    )
+
+close_card()
+
+
+open_card(
+    title="본인 성적증명서 기준 추가 요청",
+    description="분석 결과에서 더 자세히 보고 싶은 내용을 입력할 수 있습니다.",
+    pill="선택",
+    pill_class="pill-muted"
+)
+
+user_request = st.text_area(
+    "본인 성적증명서 기준 추가 요청",
+    placeholder="예) 제 성적증명서를 기준으로 졸업까지 남은 과목과 다음 학기 추천 과목을 알려줘.",
+    height=100
+)
+
+if user_request:
+    st.markdown(
+        """
+<div class="list-row">
+    <span class="pill pill-info">입력됨</span>
+    <span style="margin-left:8px;">추가 요청이 입력되었습니다.</span>
+</div>
+""",
+        unsafe_allow_html=True
+    )
+
+close_card()
+
+
+open_card(
+    title="AI 전략 분석 실행",
+    description="성적증명서 PDF 분석, 교육과정 검색, 졸업요건 비교, 추천 수강 과목 및 장학금 전략 생성을 시작합니다.",
+    pill="실행",
+    pill_class="pill-info"
+)
+
+analyze = st.button("분석 시작", type="primary", use_container_width=True)
+
+close_card()
 
 
 if analyze:
