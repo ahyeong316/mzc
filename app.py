@@ -727,6 +727,81 @@ div[data-testid="collapsedControl"] {
     padding-left: 44px !important;
     padding-right: 44px !important;
 }
+/* ===== Compact Page Layout ===== */
+
+.block-container {
+    padding-top: 44px !important;
+    padding-bottom: 40px !important;
+}
+
+h1.page-title {
+    font-size: 40px !important;
+    line-height: 1.15 !important;
+    margin-bottom: 10px !important;
+}
+
+.page-desc {
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+    margin-top: 4px !important;
+}
+
+.app-card {
+    padding: 18px 22px !important;
+    margin-bottom: 12px !important;
+}
+
+.app-card h2.card-title {
+    font-size: 30px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.card-title-row {
+    margin-bottom: 10px !important;
+}
+
+.card-desc {
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    margin-top: 8px !important;
+}
+
+div[data-testid="stFileUploader"] {
+    margin-top: -4px !important;
+}
+
+div[data-testid="stFileUploader"] section {
+    min-height: 74px !important;
+    padding: 10px 16px !important;
+}
+
+div[data-testid="stFileUploader"] section > div {
+    padding: 0 !important;
+}
+
+div[data-testid="stFileUploader"] small {
+    font-size: 12px !important;
+}
+
+div[data-testid="stButton"] button {
+    min-height: 42px !important;
+}
+
+.list-row {
+    padding: 8px 0 !important;
+}
+
+.kpi-card {
+    min-height: 86px !important;
+    padding: 14px !important;
+}
+
+.kpi-value {
+    font-size: 24px !important;
+    margin-top: 6px !important;
+}
 </style>
 """,
         unsafe_allow_html=True
@@ -824,9 +899,42 @@ def open_card(title, description=None, pill=None, pill_class="pill-info"):
 def close_card():
     st.markdown("</div>", unsafe_allow_html=True)
 
+def render_center_spacer(height=90):
+    st.markdown(
+        f'<div style="height:{height}px;"></div>',
+        unsafe_allow_html=True
+    )
+def go_to_page(page_name):
+    st.session_state.page = page_name
+    st.rerun()
+
+def render_landing_page():
+    render_page_header()
+
+    open_card(
+        title="전략 큐레이션 시작",
+        description="성적증명서 PDF를 업로드하고 AI 기반 졸업 전략 분석을 시작합니다.",
+        pill="START",
+        pill_class="pill-info"
+    )
+
+    st.markdown(
+        """
+<div class="notice-text">
+순천대학교 전략 큐레이터는 학생 본인의 성적증명서를 기반으로 이수 과목, 학점, 평점 정보를 분석하고,
+교육과정 기준과 비교하여 졸업까지 필요한 전략을 안내합니다.
+</div>
+""",
+        unsafe_allow_html=True
+    )
+
+    close_card()
+
+    if st.button("시작하기", type="primary", use_container_width=True):
+        go_to_page("home")
 
 def render_home_page():
-    render_page_header()
+    render_center_spacer(90)
 
     if st.session_state.guardrail_error_message is not None:
         st.error(st.session_state.guardrail_error_message)
@@ -882,16 +990,22 @@ def render_home_page():
             unsafe_allow_html=True
         )
 
+    else:
+        if st.session_state.uploaded_pdf_path is not None:
+            delete_current_uploaded_pdf()
+            st.session_state.privacy_notice_message = "업로드된 PDF가 삭제되었습니다."
+            st.rerun()
+
     close_card()
 
     col_left, col_right = st.columns([0.35, 0.65])
 
     with col_left:
-        delete_button = st.button(
-            "PDF 수동 삭제",
+        prev_button = st.button(
+            "이전",
             type="secondary",
             use_container_width=True,
-            key="home_pdf_delete_button"
+            key="home_prev_button"
         )
 
     with col_right:
@@ -902,17 +1016,8 @@ def render_home_page():
             key="home_next_button"
         )
 
-    if delete_button:
-
-        if st.session_state.uploaded_pdf_path is not None:
-
-            delete_current_uploaded_pdf()
-
-            st.session_state.privacy_notice_message = "PDF가 안전하게 삭제되었습니다."
-            st.rerun()
-
-        else:
-            st.warning("현재 임시 저장된 PDF가 없습니다.")
+    if prev_button:
+        go_to_page("landing")
 
     if next_button:
 
@@ -925,7 +1030,7 @@ def render_home_page():
             go_to_page("userinfo")
 
 def render_userinfo_page():
-    render_page_header()
+    render_center_spacer(110)
 
     if st.session_state.uploaded_pdf_path is None:
         open_card(
@@ -1015,7 +1120,7 @@ def render_userinfo_page():
 
             go_to_page("loading")
 def render_loading_page():
-    render_page_header()
+    render_center_spacer(130)
 
     if st.session_state.uploaded_pdf_path is None:
         open_card(
@@ -1475,7 +1580,6 @@ def show_integrated_result(report):
     close_card()
 
 def render_output_page():
-    render_page_header()
 
     if st.session_state.guardrail_error_message is not None:
         st.error(st.session_state.guardrail_error_message)
@@ -1620,7 +1724,7 @@ def render_output_page():
         st.session_state.user_request_value = ""
         st.session_state.analysis_started = False
 
-        go_to_page("home")
+        go_to_page("landing")
         
 st.set_page_config(
     page_title="순천대학교 전략 큐레이터",
@@ -1657,7 +1761,7 @@ if "privacy_notice_message" not in st.session_state:
 if "guardrail_error_message" not in st.session_state:
     st.session_state.guardrail_error_message = None
 if "page" not in st.session_state:
-    st.session_state.page = "home"
+    st.session_state.page = "landing"
 
 if "user_request_value" not in st.session_state:
     st.session_state.user_request_value = ""
@@ -1674,7 +1778,10 @@ render_sidebar()
 
 current_page = st.session_state.page
 
-if current_page == "home":
+if current_page == "landing":
+    render_landing_page()
+
+elif current_page == "home":
     render_home_page()
 
 elif current_page == "userinfo":
@@ -1687,5 +1794,5 @@ elif current_page == "output":
     render_output_page()
 
 else:
-    st.session_state.page = "home"
+    st.session_state.page = "landing"
     st.rerun()
