@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
 
 MODEL_ID = "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
