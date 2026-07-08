@@ -821,12 +821,282 @@ def open_card(title, description=None, pill=None, pill_class="pill-info"):
         unsafe_allow_html=True
     )
 
-
 def close_card():
     st.markdown("</div>", unsafe_allow_html=True)
 
 
+def render_home_page():
+    render_page_header()
+
+    if st.session_state.guardrail_error_message is not None:
+        st.error(st.session_state.guardrail_error_message)
+
+    if st.session_state.privacy_notice_message is not None:
+        st.success(st.session_state.privacy_notice_message)
+
+    st.markdown('<div id="home-area"></div>', unsafe_allow_html=True)
+
+    open_card(
+        title="성적증명서 PDF 업로드",
+        description="학생 본인의 성적증명서 PDF를 업로드하면 분석 과정에서만 임시 저장됩니다.",
+        pill="필수",
+        pill_class="pill-info"
+    )
+
+    uploaded_file = st.file_uploader(
+        "성적증명서 PDF 업로드",
+        type=["pdf"],
+        key=f"pdf_uploader_{st.session_state.uploader_key}"
+    )
+
+    if uploaded_file is not None:
+
+        is_new_file = (
+            st.session_state.uploaded_pdf_name != uploaded_file.name
+            or st.session_state.uploaded_pdf_size != uploaded_file.size
+            or st.session_state.uploaded_pdf_path is None
+        )
+
+        if is_new_file:
+
+            if st.session_state.uploaded_pdf_path is not None:
+                delete_uploaded_file(st.session_state.uploaded_pdf_path)
+
+            saved_path = save_uploaded_file(uploaded_file)
+
+            st.session_state.uploaded_pdf_path = saved_path
+            st.session_state.uploaded_pdf_name = uploaded_file.name
+            st.session_state.uploaded_pdf_size = uploaded_file.size
+            st.session_state.strategy_report = None
+            st.session_state.privacy_notice_message = None
+            st.session_state.guardrail_error_message = None
+
+        st.markdown(
+            f"""
+<div class="list-row">
+    <span class="pill pill-success">업로드 완료</span>
+    <span style="margin-left:8px;">PDF가 정상적으로 업로드되었습니다.</span>
+</div>
+<div class="list-row">파일 이름 : {_safe(uploaded_file.name)}</div>
+""",
+            unsafe_allow_html=True
+        )
+
+    close_card()
+
+    col_left, col_right = st.columns([0.35, 0.65])
+
+    with col_left:
+        delete_button = st.button(
+            "PDF 수동 삭제",
+            type="secondary",
+            use_container_width=True,
+            key="home_pdf_delete_button"
+        )
+
+    with col_right:
+        next_button = st.button(
+            "다음",
+            type="primary",
+            use_container_width=True,
+            key="home_next_button"
+        )
+
+    if delete_button:
+
+        if st.session_state.uploaded_pdf_path is not None:
+
+            delete_current_uploaded_pdf()
+
+            st.session_state.privacy_notice_message = "PDF가 안전하게 삭제되었습니다."
+            st.rerun()
+
+        else:
+            st.warning("현재 임시 저장된 PDF가 없습니다.")
+
+    if next_button:
+
+        if st.session_state.uploaded_pdf_path is None:
+            st.error("성적증명서 PDF를 먼저 업로드해주세요.")
+
+        else:
+            st.session_state.guardrail_error_message = None
+            st.session_state.privacy_notice_message = None
+            go_to_page("userinfo")
+
+def render_userinfo_page():
+    render_page_header()
+
+    if st.session_state.uploaded_pdf_path is None:
+        open_card(
+            title="성적증명서 PDF가 없습니다",
+            description="분석을 진행하려면 먼저 성적증명서 PDF를 업로드해야 합니다.",
+            pill="확인",
+            pill_class="pill-warn"
+        )
+
+        st.warning("성적증명서 PDF를 먼저 업로드해주세요.")
+
+        if st.button("PDF 업로드 화면으로 이동", type="primary", use_container_width=True):
+            go_to_page("home")
+
+        close_card()
+        return
+
+    open_card(
+        title="본인 성적증명서 기준 추가 요청",
+        description="분석 결과에서 더 자세히 보고 싶은 내용을 입력할 수 있습니다.",
+        pill="선택",
+        pill_class="pill-muted"
+    )
+
+    user_request = st.text_area(
+        "본인 성적증명서 기준 추가 요청",
+        value=st.session_state.user_request_value,
+        placeholder="예) 제 성적증명서를 기준으로 졸업까지 남은 과목과 다음 학기 추천 과목을 알려줘.",
+        height=120,
+        key="userinfo_user_request"
+    )
+
+    if user_request:
+        st.markdown(
+            """
+<div class="list-row">
+    <span class="pill pill-info">입력됨</span>
+    <span style="margin-left:8px;">추가 요청이 입력되었습니다.</span>
+</div>
+""",
+            unsafe_allow_html=True
+        )
+
+    close_card()
+
+    col_left, col_right = st.columns([0.35, 0.65])
+
+    with col_left:
+        prev_button = st.button(
+            "이전",
+            type="secondary",
+            use_container_width=True,
+            key="userinfo_prev_button"
+        )
+
+    with col_right:
+        analyze_button = st.button(
+            "분석 시작",
+            type="primary",
+            use_container_width=True,
+            key="userinfo_analyze_button"
+        )
+
+    if prev_button:
+        st.session_state.user_request_value = user_request
+        go_to_page("home")
+
+    if analyze_button:
+        st.session_state.user_request_value = user_request
+
+        validation = validate_user_request(user_request)
+
+        if not validation["allowed"]:
+            delete_current_uploaded_pdf()
+
+            st.session_state.strategy_report = None
+            st.session_state.guardrail_error_message = validation["message"]
+            st.session_state.privacy_notice_message = "차단된 요청으로 인해 업로드된 PDF는 자동으로 삭제되었습니다."
+
+            go_to_page("home")
+
+        else:
+            st.session_state.guardrail_error_message = None
+            st.session_state.privacy_notice_message = None
+            st.session_state.strategy_report = None
+            st.session_state.analysis_started = True
+
+            go_to_page("loading")
+def render_loading_page():
+    render_page_header()
+
+    if st.session_state.uploaded_pdf_path is None:
+        open_card(
+            title="성적증명서 PDF가 없습니다",
+            description="분석을 진행하려면 먼저 성적증명서 PDF를 업로드해야 합니다.",
+            pill="확인",
+            pill_class="pill-warn"
+        )
+
+        st.warning("성적증명서 PDF를 먼저 업로드해주세요.")
+
+        if st.button("PDF 업로드 화면으로 이동", type="primary", use_container_width=True):
+            go_to_page("home")
+
+        close_card()
+        return
+
+    open_card(
+        title="AI 분석 중",
+        description="Amazon Bedrock 기반으로 성적증명서와 교육과정 데이터를 분석하고 있습니다.",
+        pill="진행 중",
+        pill_class="pill-info"
+    )
+
+    progress = st.progress(0)
+    status = st.empty()
+    analysis_success = False
+
+    try:
+        uploaded_pdf_path = st.session_state.uploaded_pdf_path
+
+        status.info("성적증명서 PDF를 Amazon Bedrock AI가 분석하고 있습니다.")
+        progress.progress(20)
+        time.sleep(0.5)
+
+        status.info("교육과정 편람과 졸업요건을 검색하고 있습니다.")
+        progress.progress(45)
+        time.sleep(0.5)
+
+        status.info("졸업요건, 추천 과목, 장학 전략을 생성하고 있습니다.")
+        progress.progress(70)
+
+        strategy_report = call_full_pipeline_safely(
+            pdf_path=uploaded_pdf_path,
+            department=None,
+            user_request=st.session_state.user_request_value,
+        )
+
+        status.info("개인정보를 마스킹하고 결과를 정리하고 있습니다.")
+        progress.progress(90)
+
+        safe_strategy_report = sanitize_strategy_report(strategy_report)
+
+        st.session_state.strategy_report = safe_strategy_report
+        st.session_state.privacy_notice_message = "분석 완료 후 업로드된 PDF는 자동으로 삭제되었습니다."
+        st.session_state.guardrail_error_message = None
+        st.session_state.analysis_started = False
+
+        progress.progress(100)
+        status.success("분석 완료")
+        time.sleep(0.5)
+
+        analysis_success = True
+
+    except Exception as error:
+        st.session_state.strategy_report = None
+        st.session_state.guardrail_error_message = "분석 중 오류가 발생했습니다. Bedrock 또는 역할별 함수 연결 상태를 확인해주세요."
+        st.session_state.analysis_started = False
+        print(error)
+
+    finally:
+        close_card()
+        delete_current_uploaded_pdf()
+
+        if analysis_success:
+            go_to_page("output")
+        else:
+            go_to_page("home")
+
 def render_kpi(label, value, unit=""):
+
     st.markdown(
         f"""
 <div class="kpi-card">
@@ -1204,7 +1474,154 @@ def show_integrated_result(report):
 
     close_card()
 
+def render_output_page():
+    render_page_header()
 
+    if st.session_state.guardrail_error_message is not None:
+        st.error(st.session_state.guardrail_error_message)
+
+    if st.session_state.privacy_notice_message is not None:
+        st.success(st.session_state.privacy_notice_message)
+
+    if st.session_state.strategy_report is None:
+        open_card(
+            title="분석 결과가 없습니다",
+            description="성적증명서 PDF를 업로드하고 분석을 먼저 진행해주세요.",
+            pill="대기",
+            pill_class="pill-muted"
+        )
+
+        if st.button("PDF 업로드 화면으로 이동", type="primary", use_container_width=True):
+            go_to_page("home")
+
+        close_card()
+        return
+
+    open_card(
+        title="분석 결과 요약",
+        description="성적증명서와 교육과정 데이터를 기반으로 생성된 주요 분석 결과입니다.",
+        pill="완료",
+        pill_class="pill-success"
+    )
+
+    st.markdown(
+        """
+<div style="
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:14px;
+">
+    <div style="
+        background:#FFFFFF;
+        border:1px solid #EDEFF2;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 1px 2px rgba(0,0,0,0.03);
+    ">
+        <div style="
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            background:#EEF4FF;
+            color:#3182F6;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:900;
+            margin-bottom:14px;
+        ">01</div>
+        <div style="font-size:18px;font-weight:900;color:#191F28;margin-bottom:8px;">성적 분석</div>
+        <div style="font-size:14px;color:#8B95A1;line-height:1.55;">성적증명서에서 이수 과목, 학점, 평점 정보를 추출했습니다.</div>
+    </div>
+
+    <div style="
+        background:#FFFFFF;
+        border:1px solid #EDEFF2;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 1px 2px rgba(0,0,0,0.03);
+    ">
+        <div style="
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            background:#F2F4F6;
+            color:#6B7684;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:900;
+            margin-bottom:14px;
+        ">02</div>
+        <div style="font-size:18px;font-weight:900;color:#191F28;margin-bottom:8px;">졸업요건 비교</div>
+        <div style="font-size:14px;color:#8B95A1;line-height:1.55;">현재 이수 현황과 교육과정 편람 기준을 비교했습니다.</div>
+    </div>
+
+    <div style="
+        background:#FFFFFF;
+        border:1px solid #EDEFF2;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 1px 2px rgba(0,0,0,0.03);
+    ">
+        <div style="
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            background:#E5F9F2;
+            color:#008767;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:900;
+            margin-bottom:14px;
+        ">03</div>
+        <div style="font-size:18px;font-weight:900;color:#191F28;margin-bottom:8px;">수강 전략</div>
+        <div style="font-size:14px;color:#8B95A1;line-height:1.55;">다음 학기 추천 과목과 졸업까지의 수강 방향을 정리했습니다.</div>
+    </div>
+
+    <div style="
+        background:#FFFFFF;
+        border:1px solid #EDEFF2;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 1px 2px rgba(0,0,0,0.03);
+    ">
+        <div style="
+            width:42px;
+            height:42px;
+            border-radius:14px;
+            background:#FFF4E5;
+            color:#B25E00;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:900;
+            margin-bottom:14px;
+        ">04</div>
+        <div style="font-size:18px;font-weight:900;color:#191F28;margin-bottom:8px;">장학금 전략</div>
+        <div style="font-size:14px;color:#8B95A1;line-height:1.55;">성적 정보를 바탕으로 장학금 가능성과 관리 전략을 제시합니다.</div>
+    </div>
+</div>
+""",
+        unsafe_allow_html=True
+    )
+
+    close_card()
+
+    show_integrated_result(st.session_state.strategy_report)
+
+    st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+
+    if st.button("처음으로 돌아가기", type="primary", use_container_width=True):
+        st.session_state.strategy_report = None
+        st.session_state.privacy_notice_message = None
+        st.session_state.guardrail_error_message = None
+        st.session_state.user_request_value = ""
+        st.session_state.analysis_started = False
+
+        go_to_page("home")
+        
 st.set_page_config(
     page_title="순천대학교 전략 큐레이터",
     page_icon="🎓",
@@ -1239,252 +1656,36 @@ if "privacy_notice_message" not in st.session_state:
 
 if "guardrail_error_message" not in st.session_state:
     st.session_state.guardrail_error_message = None
+if "page" not in st.session_state:
+    st.session_state.page = "home"
 
+if "user_request_value" not in st.session_state:
+    st.session_state.user_request_value = ""
+
+if "analysis_started" not in st.session_state:
+    st.session_state.analysis_started = False
+
+
+def go_to_page(page_name):
+    st.session_state.page = page_name
+    st.rerun()
 
 render_sidebar()
-render_page_header()
 
-department = ""
-user_request = ""
-analyze = False
+current_page = st.session_state.page
 
-st.markdown('<div id="input-area"></div>', unsafe_allow_html=True)
+if current_page == "home":
+    render_home_page()
 
+elif current_page == "userinfo":
+    render_userinfo_page()
 
-open_card(
-    title="성적증명서 PDF 업로드",
-    description="학생 본인의 성적증명서 PDF를 업로드하면 분석 과정에서만 임시 저장됩니다.",
-    pill="필수",
-    pill_class="pill-info"
-)
+elif current_page == "loading":
+    render_loading_page()
 
-uploaded_file = st.file_uploader(
-    "성적증명서 PDF 업로드",
-    type=["pdf"],
-    key=f"pdf_uploader_{st.session_state.uploader_key}"
-)
+elif current_page == "output":
+    render_output_page()
 
-if uploaded_file is not None:
-
-    is_new_file = (
-        st.session_state.uploaded_pdf_name != uploaded_file.name
-        or st.session_state.uploaded_pdf_size != uploaded_file.size
-        or st.session_state.uploaded_pdf_path is None
-    )
-
-    if is_new_file:
-
-        if st.session_state.uploaded_pdf_path is not None:
-            delete_uploaded_file(st.session_state.uploaded_pdf_path)
-
-        saved_path = save_uploaded_file(uploaded_file)
-
-        st.session_state.uploaded_pdf_path = saved_path
-        st.session_state.uploaded_pdf_name = uploaded_file.name
-        st.session_state.uploaded_pdf_size = uploaded_file.size
-        st.session_state.strategy_report = None
-        st.session_state.privacy_notice_message = None
-        st.session_state.guardrail_error_message = None
-
-    st.markdown(
-        f"""
-<div class="list-row">
-    <span class="pill pill-success">업로드 완료</span>
-    <span style="margin-left:8px;">PDF가 정상적으로 업로드되었습니다.</span>
-</div>
-<div class="list-row">파일 이름 : {_safe(uploaded_file.name)}</div>
-""",
-        unsafe_allow_html=True
-    )
-
-close_card()
-
-
-open_card(
-    title="학생 기본 정보",
-    description="교육과정 편람과 졸업요건 비교에 사용할 학과 정보를 입력합니다.",
-    pill="입력",
-    pill_class="pill-muted"
-)
-
-department = st.text_input(
-    "학과를 입력하세요",
-    placeholder="예) 컴퓨터공학과"
-)
-
-if department:
-    st.markdown(
-        f"""
-<div class="list-row">학과 : {_safe(department)}</div>
-""",
-        unsafe_allow_html=True
-    )
-
-close_card()
-
-
-open_card(
-    title="본인 성적증명서 기준 추가 요청",
-    description="분석 결과에서 더 자세히 보고 싶은 내용을 입력할 수 있습니다.",
-    pill="선택",
-    pill_class="pill-muted"
-)
-
-user_request = st.text_area(
-    "본인 성적증명서 기준 추가 요청",
-    placeholder="예) 제 성적증명서를 기준으로 졸업까지 남은 과목과 다음 학기 추천 과목을 알려줘.",
-    height=100
-)
-
-if user_request:
-    st.markdown(
-        """
-<div class="list-row">
-    <span class="pill pill-info">입력됨</span>
-    <span style="margin-left:8px;">추가 요청이 입력되었습니다.</span>
-</div>
-""",
-        unsafe_allow_html=True
-    )
-
-close_card()
-
-
-open_card(
-    title="AI 전략 분석 실행",
-    description="성적증명서 PDF 분석, 교육과정 검색, 졸업요건 비교, 추천 수강 과목 및 장학금 전략 생성을 시작합니다.",
-    pill="실행",
-    pill_class="pill-info"
-)
-
-analyze = st.button("분석 시작", type="primary", use_container_width=True)
-
-close_card()
-
-
-if analyze:
-
-    st.session_state.guardrail_error_message = None
-    st.session_state.privacy_notice_message = None
-    st.session_state.strategy_report = None
-
-    validation = validate_user_request(user_request)
-
-    if st.session_state.uploaded_pdf_path is None:
-        st.error("성적증명서 PDF를 먼저 업로드해주세요.")
-
-    elif not department:
-        st.error("학과를 입력해주세요.")
-
-    elif not validation["allowed"]:
-
-        delete_current_uploaded_pdf()
-
-        st.session_state.strategy_report = None
-        st.session_state.guardrail_error_message = validation["message"]
-        st.session_state.privacy_notice_message = "차단된 요청으로 인해 업로드된 PDF는 자동으로 삭제되었습니다."
-
-        st.rerun()
-
-    else:
-        open_card(
-            title="분석 진행 중",
-            description="성적증명서와 교육과정 데이터를 기반으로 전략을 생성하고 있습니다.",
-            pill="진행 중",
-            pill_class="pill-info"
-        )
-
-        progress = st.progress(0)
-        status = st.empty()
-
-        try:
-            uploaded_pdf_path = st.session_state.uploaded_pdf_path
-
-            if not os.getenv("GOOGLE_API_KEY"):
-                st.warning("GOOGLE_API_KEY가 설정되어 있지 않아 실제 Gemini 분석이 제한될 수 있습니다.")
-
-            status.info("성적증명서 PDF를 Gemini AI가 분석하고 있습니다.")
-            progress.progress(20)
-            time.sleep(0.5)
-
-            status.info("교육과정 편람과 졸업요건을 검색하고 있습니다.")
-            progress.progress(45)
-            time.sleep(0.5)
-
-            status.info("졸업요건, 추천 과목, 장학 전략을 생성하고 있습니다.")
-            progress.progress(70)
-
-            strategy_report = call_full_pipeline_safely(
-                pdf_path=uploaded_pdf_path,
-                department=department.strip(),
-                user_request=user_request,
-            )
-
-            status.info("개인정보를 마스킹하고 결과를 정리하고 있습니다.")
-            progress.progress(90)
-
-            safe_strategy_report = sanitize_strategy_report(strategy_report)
-
-            st.session_state.strategy_report = safe_strategy_report
-            st.session_state.privacy_notice_message = "분석 완료 후 업로드된 PDF는 자동으로 삭제되었습니다."
-
-            progress.progress(100)
-            status.success("분석 완료")
-
-        except Exception as error:
-            st.session_state.strategy_report = None
-            st.session_state.guardrail_error_message = "분석 중 오류가 발생했습니다. Gemini API 또는 역할별 함수 연결 상태를 확인해주세요."
-            print(error)
-
-        finally:
-            close_card()
-            delete_current_uploaded_pdf()
-            st.rerun()
-
-
-if st.session_state.guardrail_error_message is not None:
-    st.error(st.session_state.guardrail_error_message)
-
-
-if st.session_state.strategy_report is not None:
-    show_integrated_result(st.session_state.strategy_report)
-
-
-if st.session_state.privacy_notice_message is not None:
-    st.success(st.session_state.privacy_notice_message)
-
-
-st.markdown('<div id="privacy-area"></div>', unsafe_allow_html=True)
-
-open_card(
-    title="개인정보 보호",
-    description="업로드된 PDF는 분석 과정에서만 임시 저장되며, 분석 완료 또는 금지 요청 차단 시 자동 삭제됩니다.",
-    pill="보안",
-    pill_class="pill-success"
-)
-
-st.markdown(
-    """
-<div class="notice-text">
-업로드된 PDF는 분석 과정에서만 임시 저장되며, 분석 완료 또는 금지 요청 차단 시 자동 삭제됩니다.
-</div>
-""",
-    unsafe_allow_html=True
-)
-
-delete_button = st.button("PDF 수동 삭제", type="secondary")
-
-if delete_button:
-
-    if st.session_state.uploaded_pdf_path is not None:
-
-        delete_current_uploaded_pdf()
-
-        st.session_state.privacy_notice_message = "PDF가 안전하게 삭제되었습니다."
-
-        st.rerun()
-
-    else:
-        st.warning("현재 임시 저장된 PDF가 없습니다.")
-
-close_card()
+else:
+    st.session_state.page = "home"
+    st.rerun()
