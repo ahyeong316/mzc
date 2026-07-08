@@ -1,19 +1,27 @@
 # src/curriculum_rag.py
 import boto3
 import json
+import os
 
-AWS_ACCESS_KEY = ""
-AWS_SECRET_KEY = ""
-KB_ID = "UX5APWPITZ"
-AWS_REGION = "ap-northeast-2"
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# 보안 규칙: 키를 코드에 직접 쓰지 말 것! .env 파일에서 읽는다.
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY", "")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY", "")
+KB_ID = os.getenv("KB_ID", "UX5APWPITZ")
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
 
 def get_client():
-    return boto3.client(
-        "bedrock-agent-runtime",
-        region_name=AWS_REGION,
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY
-    )
+    # 키가 .env에 있으면 사용, 없으면 boto3 기본 자격증명 체인 사용
+    client_kwargs = {"region_name": AWS_REGION}
+    if AWS_ACCESS_KEY and AWS_SECRET_KEY:
+        client_kwargs["aws_access_key_id"] = AWS_ACCESS_KEY
+        client_kwargs["aws_secret_access_key"] = AWS_SECRET_KEY
+    return boto3.client("bedrock-agent-runtime", **client_kwargs)
 
 def get_curriculum_requirements(department: str):
     client = get_client()

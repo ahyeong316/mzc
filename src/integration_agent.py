@@ -210,6 +210,16 @@ def run_role1(pdf_path: str) -> dict:
         print("임시 transcript_data를 사용합니다.")
         return get_mock_transcript_data()
 
+    # AI 호출은 됐지만 추출 실패로 빈 결과가 온 경우 → mock으로 대체
+    if not transcript_data.get("completed_courses") or not transcript_data.get("department"):
+        error_warnings = transcript_data.get("warnings", [])
+        print("역할 1 추출 결과가 비어 있어 임시 transcript_data를 사용합니다.")
+        for w in error_warnings:
+            print(f"  (원인: {w})")
+        mock = get_mock_transcript_data()
+        mock["warnings"] = mock["warnings"] + error_warnings
+        return mock
+
     print("역할 1 완료 / 학과:", transcript_data.get("department"),
           "/ GPA:", transcript_data.get("gpa"))
     return transcript_data

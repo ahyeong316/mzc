@@ -4,3 +4,4 @@ requests
 beautifulsoup4
 python-dotenv>=1.0
 pytest>=8.0
+pypdf
