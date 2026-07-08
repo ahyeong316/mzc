@@ -740,9 +740,6 @@ def render_page_header():
     uploaded_state = "업로드 완료" if st.session_state.uploaded_pdf_path else "PDF 대기"
     uploaded_class = "pill-success" if st.session_state.uploaded_pdf_path else "pill-muted"
 
-    api_state = "Gemini API 연결됨" if os.getenv("GOOGLE_API_KEY") else "Gemini API 미설정"
-    api_class = "pill-success" if os.getenv("GOOGLE_API_KEY") else "pill-warn"
-
     st.markdown(
         '<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#EEF4FF;color:#3182F6;font-size:12px;font-weight:800;margin-bottom:14px;">SCNU AI Strategy Agent</div>',
         unsafe_allow_html=True
@@ -768,7 +765,7 @@ def render_page_header():
 
     with header_right:
         st.markdown(
-            f'<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:8px;"><span class="pill {uploaded_class}">{uploaded_state}</span><span class="pill {api_class}">{api_state}</span></div>',
+            f'<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:8px;"><span class="pill {uploaded_class}">{uploaded_state}</span></div>',
             unsafe_allow_html=True
         )
 
@@ -798,6 +795,7 @@ def render_page_header():
         st.markdown(step_card("04", "전략 추천"), unsafe_allow_html=True)
 
     st.markdown('<div style="height:24px;"></div>', unsafe_allow_html=True)
+
 def open_card(title, description=None, pill=None, pill_class="pill-info"):
     pill_html = ""
 
