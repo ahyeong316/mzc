@@ -81,6 +81,128 @@ def _course_name(course):
     return str(course)
 
 
+def _first_value(*sources, keys=None, default=None):
+    """여러 dict에서 먼저 발견되는 유효한 값을 반환합니다."""
+    keys = keys or []
+
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+
+        for key in keys:
+            value = source.get(key)
+
+            if value not in (None, "", [], {}):
+                return value
+
+    return default
+
+
+def _nested_dict(source, keys):
+    """여러 후보 key 중 dict 값을 찾아 반환합니다."""
+    if not isinstance(source, dict):
+        return {}
+
+    for key in keys:
+        value = source.get(key)
+
+        if isinstance(value, dict):
+            return value
+
+    return {}
+
+
+def _extract_courses(source):
+    """성적 분석 결과 구조가 달라도 이수 과목 목록을 최대한 찾아냅니다."""
+    if not isinstance(source, dict):
+        return []
+
+    direct_courses = _first_value(
+        source,
+        keys=[
+            "completed_courses",
+            "courses",
+            "course_history",
+            "subjects",
+            "major_subjects",
+            "completed_major_subjects",
+            "이수과목",
+            "수강과목",
+            "전공 이수 과목",
+        ],
+        default=[]
+    )
+
+    if direct_courses:
+        return _as_list(direct_courses)
+
+    semester_courses = []
+
+    for semester_key in ["semesters", "semester_records", "terms", "학기별성적"]:
+        semesters = source.get(semester_key)
+
+        if isinstance(semesters, list):
+            for semester in semesters:
+                if isinstance(semester, dict):
+                    courses = _first_value(
+                        semester,
+                        keys=["courses", "subjects", "completed_courses", "수강과목", "이수과목"],
+                        default=[]
+                    )
+                    semester_courses.extend(_as_list(courses))
+
+    return semester_courses
+
+
+def _sum_credits_from_courses(courses):
+    total = 0
+
+    for course in _as_list(courses):
+        if not isinstance(course, dict):
+            continue
+
+        credit = (
+            course.get("credit")
+            or course.get("credits")
+            or course.get("학점")
+            or course.get("이수학점")
+            or 0
+        )
+
+        try:
+            total += float(credit)
+        except Exception:
+            pass
+
+    if total == 0:
+        return 0
+
+    return int(total) if total.is_integer() else total
+
+
+def call_full_pipeline_safely(pdf_path, department=None, user_request=None):
+    """
+    integration_agent.py의 run_full_pipeline 인자 구성이 달라도 최대한 실행되게 합니다.
+    department를 받는 버전이면 학과까지 전달하고, 아니면 pdf_path만 전달합니다.
+    """
+    try:
+        return run_full_pipeline(
+            pdf_path=pdf_path,
+            department=department,
+            user_request=user_request,
+        )
+    except TypeError:
+        try:
+            return run_full_pipeline(
+                pdf_path=pdf_path,
+                department=department,
+            )
+        except TypeError:
+            return run_full_pipeline(
+                pdf_path=pdf_path
+            )
+
+
 def render_design_system():
     st.markdown(
         """
@@ -583,48 +705,6 @@ section[data-testid="stSidebar"] .stButton > button::before {
     border: 2px solid currentColor;
     border-radius: 5px;
 }
-/* ===== Sidebar Button Background Remove ===== */
-
-section[data-testid="stSidebar"] .stButton {
-    width: 70px !important;
-    margin: 0 auto 10px auto !important;
-}
-
-section[data-testid="stSidebar"] .stButton > button {
-    width: 70px !important;
-    height: auto !important;
-    min-height: 34px !important;
-    border-radius: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    color: rgba(255,255,255,0.72) !important;
-    font-size: 12px !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.3px !important;
-    padding: 6px 0 !important;
-}
-
-section[data-testid="stSidebar"] .stButton:first-of-type > button {
-    background: transparent !important;
-    color: #FFFFFF !important;
-}
-
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background: transparent !important;
-    color: #FFFFFF !important;
-}
-
-section[data-testid="stSidebar"] .stButton > button:focus {
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-section[data-testid="stSidebar"] .stButton > button::before,
-section[data-testid="stSidebar"] .stButton > button::after {
-    content: none !important;
-    display: none !important;
-}
 </style>
 """,
         unsafe_allow_html=True
@@ -785,62 +865,182 @@ def show_integrated_result(report):
         close_card()
         return
 
-    student_summary = report.get("student_summary", {})
-    graduation_status = report.get("graduation_status", {})
-
-    earned_credit = (
-        report.get("earned_credit")
-        or report.get("total_credits")
-        or student_summary.get("total_credits")
-        or graduation_status.get("current_total_credits")
-        or 0
+    # run_full_pipeline 결과가 아래처럼 중첩되어 와도 읽을 수 있게 정규화합니다.
+    # 예: {"transcript_data": {...}, "strategy_report": {...}}
+    transcript_data = _nested_dict(
+        report,
+        [
+            "transcript_data",
+            "transcript",
+            "role1_result",
+            "role1",
+            "student_record",
+            "student_data",
+        ]
     )
 
-    gpa = (
-        report.get("gpa")
-        or student_summary.get("gpa")
-        or "-"
+    final_report = _nested_dict(
+        report,
+        [
+            "strategy_report",
+            "final_report",
+            "analysis_result",
+            "result",
+            "role3_result",
+            "role3",
+        ]
     )
 
-    remaining_credit = (
-        report.get("remaining_credit")
-        or report.get("remaining_credits")
-        or graduation_status.get("remaining_total_credits")
-        or graduation_status.get("remaining_credit")
-        or "-"
+    if not final_report:
+        final_report = report
+
+    student_summary = _nested_dict(
+        final_report,
+        ["student_summary", "summary", "student", "학생요약"]
+    ) or _nested_dict(
+        transcript_data,
+        ["student_summary", "summary", "student", "학생요약"]
     )
 
-    major_subjects = (
-        report.get("major_subjects")
-        or report.get("completed_major_subjects")
-        or student_summary.get("completed_courses")
-        or report.get("completed_courses")
-        or []
+    graduation_status = _nested_dict(
+        final_report,
+        ["graduation_status", "graduation", "graduation_analysis", "졸업요건", "졸업상태"]
     )
 
-    missing_courses = (
-        report.get("remaining_subjects")
-        or report.get("missing_required_courses")
-        or graduation_status.get("missing_required_courses")
-        or []
+    completed_courses = (
+        _extract_courses(final_report)
+        or _extract_courses(student_summary)
+        or _extract_courses(transcript_data)
+        or _extract_courses(report)
     )
 
-    recommended_courses = (
-        report.get("recommend_subjects")
-        or report.get("recommended_courses")
-        or report.get("recommend_courses")
-        or report.get("course_recommendations")
-        or []
+    earned_credit = _first_value(
+        final_report,
+        report,
+        student_summary,
+        transcript_data,
+        graduation_status,
+        keys=[
+            "earned_credit",
+            "earned_credits",
+            "total_credits",
+            "total_credit",
+            "completed_credits",
+            "acquired_credits",
+            "current_total_credits",
+            "total_earned_credits",
+            "총취득학점",
+            "총 취득학점",
+            "취득학점",
+            "이수학점",
+        ],
+        default=None
     )
 
-    scholarship_analysis = (
-        report.get("scholarship")
-        or report.get("scholarship_analysis")
-        or report.get("scholarship_strategy")
-        or {}
+    if earned_credit is None:
+        earned_credit = _sum_credits_from_courses(completed_courses)
+
+    gpa = _first_value(
+        final_report,
+        report,
+        student_summary,
+        transcript_data,
+        keys=[
+            "gpa",
+            "average_gpa",
+            "grade_point_average",
+            "평균평점",
+            "평점평균",
+            "전체평점",
+            "평점",
+        ],
+        default="-"
     )
 
-    warnings = report.get("warnings", [])
+    remaining_credit = _first_value(
+        final_report,
+        report,
+        graduation_status,
+        keys=[
+            "remaining_credit",
+            "remaining_credits",
+            "remaining_total_credits",
+            "부족학점",
+            "남은학점",
+            "남은 졸업학점",
+        ],
+        default="-"
+    )
+
+    major_subjects = _first_value(
+        final_report,
+        report,
+        student_summary,
+        transcript_data,
+        keys=[
+            "major_subjects",
+            "completed_major_subjects",
+            "completed_courses",
+            "courses",
+            "course_history",
+            "subjects",
+            "전공 이수 과목",
+            "이수과목",
+            "수강과목",
+        ],
+        default=completed_courses
+    )
+
+    missing_courses = _first_value(
+        final_report,
+        report,
+        graduation_status,
+        keys=[
+            "remaining_subjects",
+            "missing_required_courses",
+            "missing_courses",
+            "required_missing_courses",
+            "미이수과목",
+            "미이수 필수 과목",
+            "남은과목",
+        ],
+        default=[]
+    )
+
+    recommended_courses = _first_value(
+        final_report,
+        report,
+        keys=[
+            "recommend_subjects",
+            "recommended_courses",
+            "recommend_courses",
+            "course_recommendations",
+            "next_semester_courses",
+            "추천과목",
+            "다음학기추천과목",
+        ],
+        default=[]
+    )
+
+    scholarship_analysis = _first_value(
+        final_report,
+        report,
+        keys=[
+            "scholarship",
+            "scholarship_analysis",
+            "scholarship_strategy",
+            "장학금전략",
+            "장학분석",
+        ],
+        default={}
+    )
+
+    warnings = _first_value(
+        final_report,
+        report,
+        keys=["warnings", "warning", "주의사항"],
+        default=[]
+    )
 
     open_card("현재 이수 현황", "성적증명서에서 추출한 학점과 평점 정보를 요약합니다.", "요약", "pill-info")
 
@@ -1201,8 +1401,10 @@ if analyze:
             status.info("졸업요건, 추천 과목, 장학 전략을 생성하고 있습니다.")
             progress.progress(70)
 
-            strategy_report = run_full_pipeline(
-                pdf_path=uploaded_pdf_path
+            strategy_report = call_full_pipeline_safely(
+                pdf_path=uploaded_pdf_path,
+                department=department.strip(),
+                user_request=user_request,
             )
 
             status.info("개인정보를 마스킹하고 결과를 정리하고 있습니다.")
