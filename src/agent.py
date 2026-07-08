@@ -37,8 +37,11 @@ def create_strategy_report(
         "student_summary": {
             "department": transcript_data.get("department"),
             "student_year": transcript_data.get("student_year"),
+            "admission_year": transcript_data.get("admission_year"),
+            "total_credits": transcript_data.get("total_credits"),
             "gpa": transcript_data.get("gpa"),
             "extraction_confidence": transcript_data.get("extraction_confidence"),
+            "completed_courses": transcript_data.get("completed_courses", []),
         },
         "curriculum_source": {
             "source_pdf": curriculum_requirements.get("source_pdf"),

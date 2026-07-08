@@ -44,7 +44,7 @@ def extract_json_from_text(text: str) -> dict:
     text = text.strip()
 
     try:
-        return json.loads(text)
+        return json.loads(text, strict=False)
     except json.JSONDecodeError:
         pass
 
@@ -53,7 +53,7 @@ def extract_json_from_text(text: str) -> dict:
     if not match:
         raise ValueError("AI 응답에서 JSON을 찾지 못했습니다.")
 
-    return json.loads(match.group(0))
+    return json.loads(match.group(0), strict=False)
 
 
 def build_scholarship_prompt(

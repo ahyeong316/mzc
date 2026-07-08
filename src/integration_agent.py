@@ -250,7 +250,7 @@ def run_role2_curriculum(transcript_data: dict, department: str | None = None) -
         return get_mock_curriculum_requirements(department)
 
     try:
-        raw = get_curriculum_requirements(department)
+        raw = get_curriculum_requirements(department, student_year=transcript_data.get("admission_year"))
         curriculum_requirements = normalize_curriculum_requirements(raw, department)
     except Exception as e:
         print(f"교육과정 검색 중 오류: {e}")
@@ -338,7 +338,7 @@ department: str | None = None, user_request: str | None = None) -> dict:
 
     transcript_data = run_role1(final_pdf_path)
 
-    run_role2_sync()
+    # run_role2_sync()  # <-- 학교 홈페이지 PDF 스크래핑 기능 제거 (AWS S3 Knowledge Base 사용)
 
     curriculum_requirements = run_role2_curriculum(transcript_data, department=department)
     scholarship_policy = run_role2_scholarship_policy()
