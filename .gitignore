@@ -1,1 +1,3 @@
-src/config.py
+src/config.py.env
+__pycache__/
+temp/

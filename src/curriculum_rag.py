@@ -25,8 +25,16 @@ def get_client():
 
 def get_curriculum_requirements(department: str):
     client = get_client()
-    query = f"{department}의 졸업 요건과 전공 필수, 전공 선택, 총 졸업 학점을 정리해줘."
-    
+    query = f"""
+    {department}의 졸업 요건을 검색해서 아래의 JSON 형식으로만 응답해줘. 다른 설명은 붙이지 마.
+    {{
+        "required_total_credits": 숫자,
+        "required_major_credits": 숫자,
+        "required_general_credits": 숫자,
+        "required_courses": ["과목명1", "과목명2"]
+    }}
+    """
+
     response = client.retrieve(
         knowledgeBaseId=KB_ID,
         retrievalQuery={"text": query},

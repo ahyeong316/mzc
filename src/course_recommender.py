@@ -13,10 +13,11 @@ def recommend_next_courses(
     for course_name in missing_required_courses:
         recommendations.append({
             "course_name": course_name,
-            "category": "전공필수",
-            "priority": "높음",
-            "reason": "졸업 필수 과목이지만 아직 이수하지 않았기 때문에 우선 수강을 추천합니다."
+            "category": "전공필수 (미이수)",
+            "priority": "확인 필요",
+            "reason": "졸업 필수 과목이므로 수강해야 하지만, 이번 학기에 실제 개설되는지 학과 시간표 확인이 선행되어야 합니다."
         })
+
 
         if len(recommendations) >= max_courses:
             return recommendations

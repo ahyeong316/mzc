@@ -159,10 +159,9 @@ def normalize_curriculum_requirements(raw, department: str) -> dict:
     # 2) 역할 3이 필요로 하는 숫자 키 보충
     for key in REQUIRED_CURRICULUM_KEYS:
         if not isinstance(data.get(key), (int, float)):
-            data[key] = mock[key]
-            warnings.append(
-                f"역할 2 결과에 {key}가 없어 기본값({mock[key]})을 사용했습니다."
-            )
+            # 임시 값을 넣지 않고 빈 값(None)으로 둔 뒤 상태를 기록합니다.
+            data[key] = None
+            warnings.append(f"오류: {key} 정보를 교육과정 편람에서 찾을 수 없어 분석이 불가능합니다.")
 
     # 3) 전공필수 과목 목록 보충
     if not isinstance(data.get("required_courses"), list) or not data.get("required_courses"):
@@ -254,22 +253,43 @@ def run_role2_curriculum(transcript_data: dict, department: str | None = None) -
         raw = get_curriculum_requirements(department)
         curriculum_requirements = normalize_curriculum_requirements(raw, department)
     except Exception as e:
-        # AWS 자격증명 없음, KB 접근 실패, 형식 오류 등
         print(f"교육과정 검색 중 오류: {e}")
-        print("임시 curriculum_requirements를 사용합니다.")
-        return get_mock_curriculum_requirements(department)
+        # 오류가 나면 임시 데이터를 주는 대신, 분석이 불가능하다는 상태를 반환합니다.
+        return {
+            "department": department,
+            "status": "error",
+            "message": "교육과정 기준을 확인하지 못해 분석할 수 없습니다.",
+            "warnings": [f"검색 오류: {e}"]
+        }
 
     print("역할 2 교육과정 검색 완료 / 학과:",
           curriculum_requirements.get("department"))
     return curriculum_requirements
 
 
+try:
+    from src.scholarship_rag import get_scholarship_policy
+except ImportError:
+    get_scholarship_policy = None
+
 def run_role2_scholarship_policy() -> dict:
     print("\n===== 역할 2 실행: 장학 제도 정보 =====")
-    # 아직 역할 2에 장학 제도 함수가 없어 임시 데이터를 사용한다.
-    # 함수가 생기면 여기서 try import 방식으로 연결하면 된다.
-    print("장학 제도 조회 함수가 아직 없어 임시 scholarship_policy를 사용합니다.")
-    return get_mock_scholarship_policy()
+    
+    if get_scholarship_policy is None:
+        print("장학 제도 조회 함수(scholarship_rag)가 없어 임시 scholarship_policy를 사용합니다.")
+        return get_mock_scholarship_policy()
+        
+    try:
+        policy = get_scholarship_policy()
+        print("장학 제도 Knowledge Base 검색 완료")
+        return policy
+    except Exception as e:
+        print(f"장학 제도 검색 중 오류: {e}")
+        return {
+            "source": "error",
+            "last_synced_at": _today(),
+            "content": f"장학 정보를 불러올 수 없습니다. 오류: {e}"
+        }
 
 
 def run_role3(
@@ -309,7 +329,8 @@ def run_role4_sanitize(strategy_report: dict) -> dict:
 # 통합 파이프라인
 # ─────────────────────────────────────────────
 
-def run_full_pipeline(pdf_path: str | None = None) -> dict:
+def run_full_pipeline(pdf_path: str | None = None, 
+department: str | None = None, user_request: str | None = None) -> dict:
     final_pdf_path = get_pdf_path(pdf_path)
 
     print("===== 순천대학교 전략 큐레이터 통합 실행 =====")
@@ -319,7 +340,7 @@ def run_full_pipeline(pdf_path: str | None = None) -> dict:
 
     run_role2_sync()
 
-    curriculum_requirements = run_role2_curriculum(transcript_data)
+    curriculum_requirements = run_role2_curriculum(transcript_data, department=department)
     scholarship_policy = run_role2_scholarship_policy()
 
     strategy_report = run_role3(
