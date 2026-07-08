@@ -904,6 +904,11 @@ def render_center_spacer(height=90):
         f'<div style="height:{height}px;"></div>',
         unsafe_allow_html=True
     )
+def render_small_badge():
+    st.markdown(
+        '<div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#EEF4FF;color:#3182F6;font-size:12px;font-weight:800;margin-bottom:10px;">SCNU AI Strategy Agent</div>',
+        unsafe_allow_html=True
+    )
 def go_to_page(page_name):
     st.session_state.page = page_name
     st.rerun()
@@ -934,7 +939,8 @@ def render_landing_page():
         go_to_page("home")
 
 def render_home_page():
-    render_center_spacer(90)
+    render_small_badge()
+    render_center_spacer(60)
 
     if st.session_state.guardrail_error_message is not None:
         st.error(st.session_state.guardrail_error_message)
@@ -1030,7 +1036,8 @@ def render_home_page():
             go_to_page("userinfo")
 
 def render_userinfo_page():
-    render_center_spacer(110)
+    render_small_badge()
+    render_center_spacer(80)
 
     if st.session_state.uploaded_pdf_path is None:
         open_card(
@@ -1119,9 +1126,11 @@ def render_userinfo_page():
             st.session_state.analysis_started = True
 
             go_to_page("loading")
-def render_loading_page():
-    render_center_spacer(130)
 
+def render_loading_page():
+    render_small_badge()
+    render_center_spacer(100)
+    
     if st.session_state.uploaded_pdf_path is None:
         open_card(
             title="성적증명서 PDF가 없습니다",
